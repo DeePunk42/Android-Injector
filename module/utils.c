@@ -12,6 +12,8 @@
 #include<sys/reg.h>
 #include<sys/mman.h>
 
+#include<../include/utils.h>
+
 void Debug_reginfo(pid_t *pid)
 {
   struct pt_regs regs;
