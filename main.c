@@ -4,9 +4,9 @@
 #include<unistd.h>
 #include<sys/ptrace.h>
 
-#include"./include/config.h"
-#include"./include/utils.h"
-#include"./include/ptraceWrapper.h"
+#include"./inc/config.h"
+#include"./inc/utils.h"
+#include"./inc/ptraceWrapper.h"
 
 int main(){
 	pid_t pid;

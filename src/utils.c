@@ -3,8 +3,8 @@
 #include<stdlib.h>
 #include<unistd.h>
 
-#include<../include/utils.h>
-#include<../include/config.h>
+#include<../inc/utils.h>
+#include<../inc/config.h>
 
 int lookupPid(char *processName, pid_t *pid){
 	FILE *fp;

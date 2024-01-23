@@ -12,9 +12,9 @@
 #include<sys/reg.h>
 #include<sys/mman.h>
 
-#include<../include/ptraceWrapper.h>
-#include<../include/config.h>
-#include<../include/utils.h>
+#include<../inc/ptraceWrapper.h>
+#include<../inc/config.h>
+#include<../inc/utils.h>
 
 int ptraceWrite(pid_t *pid, unsigned long target, char *content, unsigned long length){
   unsigned long cnt = length % WORD ? length / WORD + 1 : length / WORD;
