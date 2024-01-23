@@ -2,12 +2,12 @@ CC = $(NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-cl
 CFLAGS = -march=armv8-a -m32
 
 LD = $(CC)
-LDFLAGS = -m32 -shared -llog
+LDFLAGS = -march=armv8-a -m32 -shared -llog
 
 SRC_DIR = src
+LIB_DIR = lib
 INC_DIR = inc
 OBJ_DIR = obj
-LIB_DIR = lib
 
 SRC_FILES = $(wildcard $(SRC_DIR)/*.c)
 OBJ_FILES = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRC_FILES))
@@ -24,12 +24,12 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 $(OBJ_DIR)/%.o: $(LIB_DIR)/%.c
-	$(CC) $(LDFLAGS) -c $< -o $@
+	$(LD) $(LDFLAGS) $(INCLUDES) -c $< -o $@
 
 $(TARGET): $(OBJ_FILES) main.c
 	$(CC) $(CFLAGS) $(INCLUDES) $^ -o $@
 
-$(LIB_TARGET): $(LIB_OBJ_FILES)
+$(LIB_TARGET): $(LIB_OBJ_FILES) 
 	$(LD) $(LDFLAGS) $(INCLUDES) $^ -o $@
 
 clean:
