@@ -1,5 +1,6 @@
 #include<stdio.h>
 #include<stdlib.h>
+#include<string.h>
 #include<unistd.h>
 #include<pthread.h>
 #include<dirent.h>
@@ -18,7 +19,7 @@
 int ptraceWrite(pid_t *pid, unsigned long target, char *content, unsigned long length){
   unsigned long cnt = length % WORD ? length / WORD + 1 : length / WORD;
   for(int i = 0; i < cnt; i++)
-    if(ptrace(PTRACE_POKETEXT, *pid, target + i * WORD, (unsigned long *)content + i) < 0){
+    if(ptrace(PTRACE_POKETEXT, *pid, target + i * WORD, *((unsigned long *)content + i)) < 0){
       return -1;
     }
 
@@ -30,7 +31,7 @@ void ptraceRead(pid_t *pid, unsigned long target, char *buf, unsigned long lengt
   unsigned long tmp;
   for(int i = 0; i < cnt; i++){
     tmp = ptrace(PTRACE_PEEKTEXT, *pid, target + i * WORD, NULL);
-    memcpy((unsigned long *)buf + i, tmp, sizeof(tmp));
+    memcpy((unsigned long *)buf + i, &tmp, sizeof(tmp));
   }
 
   return;
@@ -40,7 +41,11 @@ int ptraceCall(pid_t *pid, unsigned long target, unsigned long *args, unsigned l
   /* set args */
   if(argsNum > REG_ARGS_NUM){
     regs->ARM_sp -= (argsNum - REG_ARGS_NUM) * WORD;
-    if(ptraceWrite(pid, (unsigned long)regs->ARM_sp, args + REG_ARGS_NUM, (argsNum - REG_ARGS_NUM) * WORD) < 0){
+    if(ptraceWrite(
+          pid,
+          (unsigned long)regs->ARM_sp,
+          (char *)(args + REG_ARGS_NUM),
+          (argsNum - REG_ARGS_NUM) * WORD) < 0){
       fprintf(stderr, "[ERROR]write args failed");
       return -1;
     }
@@ -50,13 +55,11 @@ int ptraceCall(pid_t *pid, unsigned long target, unsigned long *args, unsigned l
 
   /* judge thumb or arm */
   regs->ARM_pc = target;
-  if(regs->ARM_pc & 1)
-  {
+  if(regs->ARM_pc & 1){
     regs->ARM_pc &= (~1u);
     regs->ARM_cpsr |= CPSR_T_MASK;
   }
-  else
-  {
+  else{
     regs->ARM_cpsr &= ~CPSR_T_MASK;
   }
 
@@ -64,28 +67,23 @@ int ptraceCall(pid_t *pid, unsigned long target, unsigned long *args, unsigned l
   regs->ARM_lr = 0;
 
   /* set regs */
-  if(ptrace(PTRACE_SETREGS, *pid, NULL, regs) < 0)
-  {
+  if(ptrace(PTRACE_SETREGS, *pid, NULL, regs) < 0){
     fprintf(stderr, "[ERROR]Set registers failed\n");
     return -1;
   }
 
   /* continue */
   int stat = 0;
-  while(stat != 0xb7f)
-  {
-    if(ptrace(PTRACE_CONT, *pid, NULL, NULL) < 0)
-    {
+  while(stat != 0xb7f){
+    if(ptrace(PTRACE_CONT, *pid, NULL, NULL) < 0){
       fprintf(stderr, "[ERROR]Continue failed\n");
       return -1;
     }
     waitpid(*pid, &stat, WUNTRACED);
-    printf("status: %x\n", stat);
   }
 
   /* return value saved*/
-  if(ptrace(PTRACE_GETREGS, *pid, NULL, regs) < 0)
-  {
+  if(ptrace(PTRACE_GETREGS, *pid, NULL, regs) < 0){
     fprintf(stderr, "[ERROR]Get return value failed\n");
     return -1;
   }
@@ -93,16 +91,14 @@ int ptraceCall(pid_t *pid, unsigned long target, unsigned long *args, unsigned l
   return 0;
 }
 
-int ptraceInject(pid_t *pid)
-{	
+int ptraceInject(pid_t *pid){	
   /* get function address */
   unsigned long dlopenAddr = lookupFuncAddr(dlopen, LIBDLSO, pid);
   unsigned long mmapAddr = lookupFuncAddr(mmap, LIBCSO, pid);
 	printf("[INFO]Functions address got: %lx, %lx\n", dlopenAddr, mmapAddr);
  
   /* attach */
-	if(ptrace(PTRACE_ATTACH, *pid, NULL, NULL) < 0)
-  {
+	if(ptrace(PTRACE_ATTACH, *pid, NULL, NULL) < 0){
     fprintf(stderr, "[ERROR]Failed to attach target process\n");
   }
   waitpid(*pid, NULL, WUNTRACED);
@@ -111,15 +107,14 @@ int ptraceInject(pid_t *pid)
   memset(&savedRegs, 0, sizeof(struct user_regs));
   memset(&regs, 0, sizeof(struct user_regs));
 
-  if(ptrace(PTRACE_GETREGS, *pid, NULL, &savedRegs) < 0)
-  {
+  if(ptrace(PTRACE_GETREGS, *pid, NULL, &savedRegs) < 0){
     fprintf(stderr, "[ERROR]Failed to Get registers information\n");
     return -1;
   }
   memcpy(&regs, &savedRegs, sizeof(struct pt_regs));
 
   /* call mmap*/
-  long args[0x10], ret;
+  unsigned long args[0x10], ret;
   args[0] = 0;
   args[1] = 0x100;
   args[2] = PROT_READ|PROT_WRITE|PROT_EXEC;
@@ -127,8 +122,7 @@ int ptraceInject(pid_t *pid)
   args[4] = 0;
   args[5] = 0;
   
-  if(ptraceCall(pid, mmapAddr, args, 6, &regs) < 0)
-  {
+  if(ptraceCall(pid, mmapAddr, args, 6, &regs) < 0){
     fprintf(stderr, "[ERROR]Failed to call mmap\n");
     return -1;
   }
@@ -149,8 +143,7 @@ int ptraceInject(pid_t *pid)
   args[0] = (long)ret;
   args[1] = RTLD_NOW| RTLD_GLOBAL;
   
-  if(ptraceCall(pid, dlopenAddr, args, 2, &regs) < 0)
-  {
+  if(ptraceCall(pid, dlopenAddr, args, 2, &regs) < 0){
     fprintf(stderr, "[ERROR]Failed to call dlopen\n");
     return -1;
   }
@@ -159,8 +152,7 @@ int ptraceInject(pid_t *pid)
   printf("[INFO]Dlopen successfully at %lx\n", ret);
 
 /* recover regs */
-  if(ptrace(PTRACE_SETREGS, *pid, NULL, &savedRegs) < 0)
-  {
+  if(ptrace(PTRACE_SETREGS, *pid, NULL, &savedRegs) < 0){
     fprintf(stderr, "[ERROR]Failed to recover regs\n");
     return -1;
   }
